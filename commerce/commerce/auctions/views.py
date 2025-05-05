@@ -118,3 +118,80 @@ def view_item_categories(request, category_name):
                       "category_name":category_name,
                       "category_name_list": category.category.all()
                   })
+
+## Add comments 
+@login_required
+def make_comment(request):
+    if request.method == "POST":
+        auction_id = request.POST.get("auction_list_id")
+        auction_instance = Auction_listing.objects.get(pk=auction_id)
+        comment = request.POST.get("comment")
+        comments = Comment.objects.create(auction_listing=auction_instance,comment=comment)
+        comments.save()
+
+    return HttpResponseRedirect(reverse("item_detail", args=[auction_id]))
+
+
+## Create watchlist:
+@login_required
+def watch_list(request):
+    if request.method == "POST":
+        list_id = request.POST.get("watch_list_id")
+        auction_instance = Auction_listing.objects.get(pk=list_id)
+        user_instance = request.user
+
+        in_watchlist = auction_instance.watchlist
+        if in_watchlist.filter(id=user_instance.id).exists():
+            in_watchlist.remove(user_instance)
+        # a1 = Watchlist(watchlist_username=user_instance)
+        # a1.save()
+        # a1.watchlist_listing.add(auction_instance)
+        # watchlist, created = Watchlist.objects.get_or_create(watchlist_username=user_instance)
+
+        # watchlist = Watchlist.objects.create(watchlist_username = user_instance, watchlist_listing = auction_instance)
+        # watchlist.watchlist_listing.add(auction_instance)
+        else:
+            in_watchlist.add(user_instance)
+            # in_watchlist.save()
+        return HttpResponseRedirect(reverse("watchlist"))
+    return HttpResponseRedirect(reverse("index"))
+
+## View Watchlist:
+@login_required
+def view_watch_list(request):
+        logged_in_user = request.user
+        # watch_list = Auction_listing.objects.get(owner=logged_in_user)
+        return render(request, "auctions/watchlist.html",
+                  {
+                      "active_list":Auction_listing.objects.filter(watchlist=logged_in_user),
+                  })
+
+@login_required
+def bid(request):
+    if request.method == "POST":
+        auction_id = request.POST.get("auction_list_id")
+        auction_instance = Auction_listing.objects.get(pk=auction_id)
+        bidder_name = request.user
+        bid = request.POST.get("current_bid")
+        if bidder_name == auction_instance.owner:
+            messages.error(request, "Creator cannot bid in their own auction list")
+        else:
+            
+            current_bidding_amount = Bid.objects.filter(auction_listing = auction_instance).last()
+
+            
+            if current_bidding_amount == None:
+                    ## Create a bid
+                bids = Bid.objects.create(auction_listing=auction_instance,bidder_name=bidder_name,bidding_amount=bid)
+                bids.save()
+            elif int(bid) <= int(auction_instance.starting_bid) or current_bidding_amount.bidding_amount >= int(bid):
+                messages.error(request, f""" Your bid is {bid}
+                            Place bid higher than the leading bid or starting bid""")
+            else:
+                    ## Update a bid 
+                current_bidding_amount.bidding_amount = bid
+                current_bidding_amount.save()
+                messages.success(request,"Bid placed successfully")
+            return HttpResponseRedirect(reverse("item_detail", args=[auction_id]))
+        return HttpResponseRedirect(reverse("item_detail", args=[auction_id]))
+    return HttpResponseRedirect(reverse("index"))
